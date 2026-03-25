@@ -292,6 +292,214 @@ def chan_fx(df):
     return df
 
 
+def detect_bi(df):
+    """
+    Detect Bi (笔) - connects adjacent top and bottom fractals.
+    A bi must have at least 5 K-lines between fractals (including endpoints).
+    Returns list of bi with start/end dates and prices.
+    """
+    if "fx_peak" not in df.columns:
+        df = chan_fx(df)
+    
+    bi_list = []
+    fractals = []
+    
+    # Collect all fractals with their indices and types
+    for i in range(len(df)):
+        if df["fx_peak"].iloc[i]:
+            fractals.append({
+                "idx": i,
+                "date": df.index[i],
+                "price": df["high"].iloc[i],
+                "type": "peak"
+            })
+        elif df["fx_trough"].iloc[i]:
+            fractals.append({
+                "idx": i,
+                "date": df.index[i],
+                "price": df["low"].iloc[i],
+                "type": "trough"
+            })
+    
+    # Connect alternating fractals to form bi
+    for i in range(len(fractals) - 1):
+        curr = fractals[i]
+        next_frac = fractals[i + 1]
+        
+        # Check if they alternate (peak->trough or trough->peak)
+        if curr["type"] != next_frac["type"]:
+            # Check minimum distance (at least 5 K-lines)
+            if next_frac["idx"] - curr["idx"] >= 4:
+                bi_list.append({
+                    "start_date": curr["date"],
+                    "end_date": next_frac["date"],
+                    "start_price": curr["price"],
+                    "end_price": next_frac["price"],
+                    "start_idx": curr["idx"],
+                    "end_idx": next_frac["idx"],
+                    "type": f"{curr['type']}_to_{next_frac['type']}"
+                })
+    
+    return bi_list
+
+
+def detect_zhongshu(df, bi_list):
+    """
+    Detect Zhongshu (中枢) - formed by 3 overlapping bi.
+    Returns list of zhongshu with ZG (upper) and ZD (lower) bounds.
+    """
+    zhongshu_list = []
+    
+    if len(bi_list) < 3:
+        return zhongshu_list
+    
+    # Check every 3 consecutive bi for overlap
+    for i in range(len(bi_list) - 2):
+        bi1 = bi_list[i]
+        bi2 = bi_list[i + 1]
+        bi3 = bi_list[i + 2]
+        
+        # Get price ranges for each bi
+        bi1_high = max(bi1["start_price"], bi1["end_price"])
+        bi1_low = min(bi1["start_price"], bi1["end_price"])
+        
+        bi2_high = max(bi2["start_price"], bi2["end_price"])
+        bi2_low = min(bi2["start_price"], bi2["end_price"])
+        
+        bi3_high = max(bi3["start_price"], bi3["end_price"])
+        bi3_low = min(bi3["start_price"], bi3["end_price"])
+        
+        # Find overlap zone
+        overlap_high = min(bi1_high, bi2_high, bi3_high)
+        overlap_low = max(bi1_low, bi2_low, bi3_low)
+        
+        # If there's a valid overlap
+        if overlap_high > overlap_low:
+            zhongshu_list.append({
+                "start_date": bi1["start_date"],
+                "end_date": bi3["end_date"],
+                "zg": overlap_high,  # Upper bound
+                "zd": overlap_low,   # Lower bound
+                "bi_indices": [i, i + 1, i + 2]
+            })
+    
+    return zhongshu_list
+
+
+def detect_beichi(df):
+    """
+    Detect MACD Divergence (背驰).
+    Compare MACD histogram area of current move vs previous move.
+    Returns divergence status and details.
+    """
+    ema_fast = df["close"].ewm(span=12, adjust=False).mean()
+    ema_slow = df["close"].ewm(span=26, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    histogram = macd_line - signal_line
+    
+    if len(histogram) < 20:
+        return {"has_divergence": False, "details": "数据不足"}
+    
+    # Find peaks and troughs in histogram
+    recent_hist = histogram.tail(20).values
+    
+    # Calculate area under histogram (absolute value)
+    current_area = np.sum(np.abs(recent_hist[-10:]))
+    previous_area = np.sum(np.abs(recent_hist[-20:-10]))
+    
+    has_divergence = current_area < previous_area * 0.8  # 20% threshold
+    
+    return {
+        "has_divergence": has_divergence,
+        "current_area": float(current_area),
+        "previous_area": float(previous_area),
+        "ratio": float(current_area / (previous_area + 1e-10))
+    }
+
+
+def detect_chan_buy_sell_points(df, zhongshu_list):
+    """
+    Detect buy/sell points based on zhongshu and MACD divergence.
+    Returns list of buy/sell points with types (一买/二买/三买, 一卖/二卖/三卖).
+    """
+    points = []
+    
+    if len(zhongshu_list) == 0 or len(df) < 30:
+        return points
+    
+    current_zhongshu = zhongshu_list[-1]
+    zg = current_zhongshu["zg"]
+    zd = current_zhongshu["zd"]
+    
+    # Get MACD divergence info
+    beichi_info = detect_beichi(df)
+    
+    # Get recent price action
+    recent_prices = df["close"].tail(10).values
+    current_price = recent_prices[-1]
+    
+    # 一买 (1st Buy): Price falls below zhongshu with MACD divergence
+    if current_price < zd and beichi_info["has_divergence"]:
+        points.append({
+            "type": "一买",
+            "date": df.index[-1],
+            "price": float(current_price),
+            "signal": "BUY"
+        })
+    
+    # 二买 (2nd Buy): Price pulls back to zhongshu after breaking above it
+    if len(recent_prices) >= 5:
+        if recent_prices[-5] > zg and zd <= current_price <= zg:
+            points.append({
+                "type": "二买",
+                "date": df.index[-1],
+                "price": float(current_price),
+                "signal": "BUY"
+            })
+    
+    # 三买 (3rd Buy): Price breaks above zhongshu and pulls back to ZG level
+    if len(recent_prices) >= 5:
+        if recent_prices[-5] > zg and zd <= current_price <= zg and current_price >= zg * 0.98:
+            points.append({
+                "type": "三买",
+                "date": df.index[-1],
+                "price": float(current_price),
+                "signal": "BUY"
+            })
+    
+    # 一卖 (1st Sell): Price rises above zhongshu with MACD divergence
+    if current_price > zg and beichi_info["has_divergence"]:
+        points.append({
+            "type": "一卖",
+            "date": df.index[-1],
+            "price": float(current_price),
+            "signal": "SELL"
+        })
+    
+    # 二卖 (2nd Sell): Price pulls back to zhongshu after breaking below it
+    if len(recent_prices) >= 5:
+        if recent_prices[-5] < zd and zd <= current_price <= zg:
+            points.append({
+                "type": "二卖",
+                "date": df.index[-1],
+                "price": float(current_price),
+                "signal": "SELL"
+            })
+    
+    # 三卖 (3rd Sell): Price breaks below zhongshu and pulls back to ZD level
+    if len(recent_prices) >= 5:
+        if recent_prices[-5] < zd and zd <= current_price <= zg and current_price <= zd * 1.02:
+            points.append({
+                "type": "三卖",
+                "date": df.index[-1],
+                "price": float(current_price),
+                "signal": "SELL"
+            })
+    
+    return points
+
+
 def detect_chan_signals(df, lookback=20):
     """
     Detect Chan theory buy/sell signals from fractal breaks.
@@ -475,8 +683,8 @@ def analyze(df):
 
 # ============ Professional Chart Functions ============
 
-def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
-    """Create professional K-line chart with volume at bottom."""
+def create_main_kline_chart(df, buy_signals=None, sell_signals=None, bi_list=None, zhongshu_list=None, chan_points=None):
+    """Create professional K-line chart with volume at bottom, including Chan Theory elements."""
     # Create figure with 2 rows: main chart + volume
     fig = make_subplots(
         rows=2, cols=1,
@@ -599,7 +807,38 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
             row=1, col=1
         )
     
-    # 6. Buy/Sell signals
+    # 6. Draw Bi (笔) as lines connecting fractals
+    if bi_list is not None and len(bi_list) > 0:
+        for bi in bi_list[-10:]:  # Show last 10 bi to avoid clutter
+            fig.add_trace(
+                go.Scatter(
+                    x=[bi["start_date"], bi["end_date"]],
+                    y=[bi["start_price"], bi["end_price"]],
+                    mode="lines",
+                    name="笔",
+                    line=dict(color="#2196f3", width=2),
+                    hovertemplate='笔<br>%{x|%Y-%m-%d}: %{y:.2f}<extra></extra>',
+                    showlegend=False
+                ),
+                row=1, col=1
+            )
+    
+    # 7. Draw Zhongshu (中枢) as shaded rectangles
+    if zhongshu_list is not None and len(zhongshu_list) > 0:
+        for zhongshu in zhongshu_list[-5:]:  # Show last 5 zhongshu
+            fig.add_shape(
+                type="rect",
+                x0=zhongshu["start_date"],
+                x1=zhongshu["end_date"],
+                y0=zhongshu["zd"],
+                y1=zhongshu["zg"],
+                fillcolor="rgba(255, 193, 7, 0.15)",
+                line=dict(color="rgba(255, 193, 7, 0.5)", width=1),
+                layer="below",
+                row=1, col=1
+            )
+    
+    # 8. Buy/Sell signals
     if buy_signals is None:
         buy_signals = []
     if sell_signals is None:
@@ -635,7 +874,50 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
             row=1, col=1
         )
     
-    # 7. Volume bars
+    # 9. Chan Theory Buy/Sell Points (一买/二买/三买, 一卖/二卖/三卖)
+    if chan_points is not None and len(chan_points) > 0:
+        buy_points = [p for p in chan_points if p["signal"] == "BUY"]
+        sell_points = [p for p in chan_points if p["signal"] == "SELL"]
+        
+        if buy_points:
+            buy_dates = [p["date"] for p in buy_points]
+            buy_prices = [p["price"] * 0.99 for p in buy_points]
+            buy_labels = [p["type"] for p in buy_points]
+            fig.add_trace(
+                go.Scatter(
+                    x=buy_dates,
+                    y=buy_prices,
+                    mode="markers+text",
+                    name="缠论买点",
+                    marker=dict(symbol="triangle-up", size=12, color="#76ff03"),
+                    text=buy_labels,
+                    textposition="bottom center",
+                    textfont=dict(size=9, color="#76ff03"),
+                    hovertemplate='%{text}<br>日期: %{x|%Y-%m-%d}<br>价格: %{y:.2f}<extra></extra>'
+                ),
+                row=1, col=1
+            )
+        
+        if sell_points:
+            sell_dates = [p["date"] for p in sell_points]
+            sell_prices = [p["price"] * 1.01 for p in sell_points]
+            sell_labels = [p["type"] for p in sell_points]
+            fig.add_trace(
+                go.Scatter(
+                    x=sell_dates,
+                    y=sell_prices,
+                    mode="markers+text",
+                    name="缠论卖点",
+                    marker=dict(symbol="triangle-down", size=12, color="#ff5252"),
+                    text=sell_labels,
+                    textposition="top center",
+                    textfont=dict(size=9, color="#ff5252"),
+                    hovertemplate='%{text}<br>日期: %{x|%Y-%m-%d}<br>价格: %{y:.2f}<extra></extra>'
+                ),
+                row=1, col=1
+            )
+    
+    # 10. Volume bars
     vol_colors = [TV_THEME['volume_up'] if df["close"].iloc[i] >= df["open"].iloc[i] 
                   else TV_THEME['volume_down'] for i in range(len(df))]
     fig.add_trace(
@@ -1072,6 +1354,12 @@ def main():
     buy_signals = [s for s in all_signals if s["type"] == "BUY"]
     sell_signals = [s for s in all_signals if s["type"] == "SELL"]
     
+    # Detect Chan Theory elements
+    bi_list = detect_bi(df)
+    zhongshu_list = detect_zhongshu(df, bi_list)
+    chan_points = detect_chan_buy_sell_points(df, zhongshu_list)
+    beichi_info = detect_beichi(df)
+    
     # Signal summary
     st.subheader("缠论买卖信号")
     col_b, col_s = st.columns(2)
@@ -1086,12 +1374,80 @@ def main():
     
     st.write("---")
     
+    # ============ Chan Theory Analysis Section ============
+    st.subheader("缠论分析 (Chan Theory Analysis)")
+    
+    # Display Chan Theory metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if len(zhongshu_list) > 0:
+            current_zg = zhongshu_list[-1]["zg"]
+            st.metric("中枢上界 (ZG)", f"{current_zg:.2f}")
+        else:
+            st.metric("中枢上界 (ZG)", "N/A")
+    
+    with col2:
+        if len(zhongshu_list) > 0:
+            current_zd = zhongshu_list[-1]["zd"]
+            st.metric("中枢下界 (ZD)", f"{current_zd:.2f}")
+        else:
+            st.metric("中枢下界 (ZD)", "N/A")
+    
+    with col3:
+        if len(bi_list) > 0:
+            st.metric("笔数量", len(bi_list))
+        else:
+            st.metric("笔数量", "0")
+    
+    with col4:
+        if len(zhongshu_list) > 0:
+            st.metric("中枢数量", len(zhongshu_list))
+        else:
+            st.metric("中枢数量", "0")
+    
+    # Current price position relative to zhongshu
+    st.write("**当前价格位置：**")
+    if len(zhongshu_list) > 0:
+        current_zg = zhongshu_list[-1]["zg"]
+        current_zd = zhongshu_list[-1]["zd"]
+        current_price = result['close']
+        
+        if current_price > current_zg:
+            st.success(f"✓ 价格 {current_price:.2f} 在中枢上方 (ZG: {current_zg:.2f})")
+        elif current_price < current_zd:
+            st.error(f"✗ 价格 {current_price:.2f} 在中枢下方 (ZD: {current_zd:.2f})")
+        else:
+            st.info(f"→ 价格 {current_price:.2f} 在中枢内部 (ZD: {current_zd:.2f} - ZG: {current_zg:.2f})")
+    else:
+        st.warning("中枢数据不足")
+    
+    # MACD Divergence status
+    st.write("**背驰 (MACD Divergence) 状态：**")
+    if beichi_info["has_divergence"]:
+        st.warning(f"⚠ 检测到背驰信号 (当前面积: {beichi_info['current_area']:.2f}, 比率: {beichi_info['ratio']:.2f})")
+    else:
+        st.info(f"✓ 无背驰信号 (当前面积: {beichi_info['current_area']:.2f}, 比率: {beichi_info['ratio']:.2f})")
+    
+    # Latest buy/sell points
+    st.write("**最新买卖点：**")
+    if len(chan_points) > 0:
+        for point in chan_points[-3:]:
+            if point["signal"] == "BUY":
+                st.success(f"🟢 {point['type']} - {point['date'].strftime('%Y-%m-%d')} @ {point['price']:.2f}")
+            else:
+                st.error(f"🔴 {point['type']} - {point['date'].strftime('%Y-%m-%d')} @ {point['price']:.2f}")
+    else:
+        st.info("暂无买卖点信号")
+    
+    st.write("---")
+    
     # ============ Professional Charts Section ============
     st.subheader("专业K线图")
     
-    # Main K-line chart
-    st.write("**主图 - K线、均线、布林带与成交量**")
-    fig_main = create_main_kline_chart(df, buy_signals, sell_signals)
+    # Main K-line chart with Chan Theory elements
+    st.write("**主图 - K线、均线、布林带、缠论分析与成交量**")
+    fig_main = create_main_kline_chart(df, buy_signals, sell_signals, bi_list, zhongshu_list, chan_points)
     st.plotly_chart(fig_main, use_container_width=True)
     
     # Three charts in a row
