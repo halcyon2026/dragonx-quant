@@ -516,9 +516,9 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
         go.Scatter(
             x=df.index,
             y=sma20,
-            name="SMA20",
+            name="均线20",
             line=dict(color=TV_THEME['sma20_color'], width=1.5),
-            hovertemplate='SMA20: %{y:.2f}<extra></extra>'
+            hovertemplate='均线20: %{y:.2f}<extra></extra>'
         ),
         row=1, col=1
     )
@@ -528,9 +528,9 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
         go.Scatter(
             x=df.index,
             y=sma50,
-            name="SMA50",
+            name="均线50",
             line=dict(color=TV_THEME['sma50_color'], width=1.5),
-            hovertemplate='SMA50: %{y:.2f}<extra></extra>'
+            hovertemplate='均线50: %{y:.2f}<extra></extra>'
         ),
         row=1, col=1
     )
@@ -540,7 +540,7 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
         go.Scatter(
             x=df.index,
             y=boll_upper,
-            name="BOLL Upper",
+            name="布林上轨",
             line=dict(color=TV_THEME['boll_color'], width=1, dash='dash'),
             hoverinfo='skip'
         ),
@@ -550,9 +550,9 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
         go.Scatter(
             x=df.index,
             y=boll_mid,
-            name="BOLL Mid",
+            name="布林中轨",
             line=dict(color=TV_THEME['boll_color'], width=1),
-            hovertemplate='BOLL Mid: %{y:.2f}<extra></extra>'
+            hovertemplate='布林中轨: %{y:.2f}<extra></extra>'
         ),
         row=1, col=1
     )
@@ -560,7 +560,7 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
         go.Scatter(
             x=df.index,
             y=boll_lower,
-            name="BOLL Lower",
+            name="布林下轨",
             line=dict(color=TV_THEME['boll_color'], width=1, dash='dash'),
             fill='tonexty',
             fillcolor='rgba(120, 123, 134, 0.1)',
@@ -579,9 +579,9 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
                 x=peaks.index,
                 y=peaks["high"] * 1.005,
                 mode="markers",
-                name="Peak",
+                name="顶分型",
                 marker=dict(symbol="triangle-down", size=10, color="#ff9800"),
-                hovertemplate='Peak: %{y:.2f}<extra></extra>'
+                hovertemplate='顶分型: %{y:.2f}<extra></extra>'
             ),
             row=1, col=1
         )
@@ -592,9 +592,9 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
                 x=troughs.index,
                 y=troughs["low"] * 0.995,
                 mode="markers",
-                name="Trough",
+                name="底分型",
                 marker=dict(symbol="triangle-up", size=10, color="#4caf50"),
-                hovertemplate='Trough: %{y:.2f}<extra></extra>'
+                hovertemplate='底分型: %{y:.2f}<extra></extra>'
             ),
             row=1, col=1
         )
@@ -613,9 +613,9 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
                 x=buy_dates,
                 y=buy_prices,
                 mode="markers",
-                name="BUY",
+                name="买点",
                 marker=dict(symbol="triangle-up", size=15, color="#00e676", line=dict(width=2, color="#1b5e20")),
-                hovertemplate='BUY Signal<br>Date: %{x|%Y-%m-%d}<br>Price: %{y:.2f}<extra></extra>'
+                hovertemplate='买点<br>日期: %{x|%Y-%m-%d}<br>价格: %{y:.2f}<extra></extra>'
             ),
             row=1, col=1
         )
@@ -628,9 +628,9 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
                 x=sell_dates,
                 y=sell_prices,
                 mode="markers",
-                name="SELL",
+                name="卖点",
                 marker=dict(symbol="triangle-down", size=15, color="#ff1744", line=dict(width=2, color="#b71c1c")),
-                hovertemplate='SELL Signal<br>Date: %{x|%Y-%m-%d}<br>Price: %{y:.2f}<extra></extra>'
+                hovertemplate='卖点<br>日期: %{x|%Y-%m-%d}<br>价格: %{y:.2f}<extra></extra>'
             ),
             row=1, col=1
         )
@@ -642,9 +642,9 @@ def create_main_kline_chart(df, buy_signals=None, sell_signals=None):
         go.Bar(
             x=df.index,
             y=df["volume"],
-            name="Volume",
+            name="成交量",
             marker_color=vol_colors,
-            hovertemplate='Volume: %{y:,.0f}<extra></extra>'
+            hovertemplate='成交量: %{y:,.0f}<extra></extra>'
         ),
         row=2, col=1
     )
@@ -707,9 +707,9 @@ def create_macd_chart(df):
         go.Bar(
             x=df.index,
             y=histogram,
-            name="Histogram",
+            name="柱状图",
             marker_color=hist_colors,
-            hovertemplate='Hist: %{y:.4f}<extra></extra>'
+            hovertemplate='柱状图: %{y:.4f}<extra></extra>'
         )
     )
     
@@ -729,9 +729,9 @@ def create_macd_chart(df):
         go.Scatter(
             x=df.index,
             y=signal_line,
-            name="Signal",
+            name="信号线",
             line=dict(color=TV_THEME['signal_color'], width=1.5),
-            hovertemplate='Signal: %{y:.4f}<extra></extra>'
+            hovertemplate='信号线: %{y:.4f}<extra></extra>'
         )
     )
     
@@ -958,42 +958,42 @@ def main():
     st.write(f"Composite Score: {result['score']}")
     
     # Key metrics - Price Data
-    st.subheader("Price Data")
+    st.subheader("价格数据")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Last Price", f"{result['close']:.2f}")
+        st.metric("最新价", f"{result['close']:.2f}")
     with col2:
-        st.metric("High", f"{result['high']:.2f}")
+        st.metric("最高价", f"{result['high']:.2f}")
     with col3:
-        st.metric("Low", f"{result['low']:.2f}")
+        st.metric("最低价", f"{result['low']:.2f}")
     with col4:
-        st.metric("SMA 20", f"{result['sma20']:.2f}")
+        st.metric("均线20", f"{result['sma20']:.2f}")
     
     col5, col6, col7, col8 = st.columns(4)
     with col5:
-        st.metric("SMA 50", f"{result['sma50']:.2f}")
+        st.metric("均线50", f"{result['sma50']:.2f}")
     with col6:
-        st.metric("EMA 20", f"{result['ema20']:.2f}")
+        st.metric("指数均线20", f"{result['ema20']:.2f}")
     with col7:
-        st.metric("Support", f"{result['support']:.2f}")
+        st.metric("支撑位", f"{result['support']:.2f}")
     with col8:
-        st.metric("Resistance", f"{result['resistance']:.2f}")
+        st.metric("阻力位", f"{result['resistance']:.2f}")
     
     st.write("---")
     
     # Technical Indicators
-    st.subheader("Technical Indicators")
+    st.subheader("技术指标")
     
     # RSI
-    st.write("**RSI (14):**")
+    st.write("**RSI分析：**")
     rsi_val = result['rsi']
     st.metric("RSI", f"{rsi_val:.1f}")
     if rsi_val < 30:
-        st.success("RSI indicates OVERSOLD - Potential buying opportunity")
+        st.success("RSI超卖 - 潜在买入机会")
     elif rsi_val > 70:
-        st.warning("RSI indicates OVERBOUGHT - Potential selling opportunity")
+        st.warning("RSI超买 - 潜在卖出机会")
     else:
-        st.info("RSI is in NEUTRAL zone")
+        st.info("RSI中性区间")
     
     # MACD
     st.write("**MACD:**")
@@ -1006,7 +1006,7 @@ def main():
         st.metric("MACD Histogram", f"{result['macd_hist']:.3f}")
     
     # KDJ
-    st.write("**KDJ:**")
+    st.write("**KDJ分析：**")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("K", f"{result['kdj_k']:.1f}")
@@ -1017,11 +1017,11 @@ def main():
     
     j_val = result['kdj_j']
     if j_val < 0:
-        st.success("KDJ indicates OVERSOLD - Potential buying opportunity")
+        st.success("KDJ超卖 - 潜在买入机会")
     elif j_val > 100:
-        st.warning("KDJ indicates OVERBOUGHT - Potential selling opportunity")
+        st.warning("KDJ超买 - 潜在卖出机会")
     else:
-        st.info("KDJ is in NEUTRAL zone")
+        st.info("KDJ中性区间")
     
     # Bollinger Bands
     st.write("**Bollinger Bands:**")
@@ -1059,7 +1059,7 @@ def main():
         st.write(f"ATR Risk: {result['atr_risk']:.3f}")
     
     # Fibonacci levels
-    st.subheader("Fibonacci Retracement Levels")
+    st.subheader("斐波那契回撤位")
     fib_cols = st.columns(len(result['fib_levels']))
     for i, (level, value) in enumerate(result['fib_levels'].items()):
         with fib_cols[i]:
@@ -1073,14 +1073,14 @@ def main():
     sell_signals = [s for s in all_signals if s["type"] == "SELL"]
     
     # Signal summary
-    st.subheader("Chan Theory Signals")
+    st.subheader("缠论买卖信号")
     col_b, col_s = st.columns(2)
     with col_b:
-        st.success(f"**BUY Signals (last 20 bars):** {len(buy_signals)}")
+        st.success(f"**买入信号（近20根K线）：** {len(buy_signals)}")
         for s in buy_signals[:5]:
             st.write(f"  {s['date'].strftime('%Y-%m-%d')} — {s['price']:.2f}")
     with col_s:
-        st.error(f"**SELL Signals (last 20 bars):** {len(sell_signals)}")
+        st.error(f"**卖出信号（近20根K线）：** {len(sell_signals)}")
         for s in sell_signals[:5]:
             st.write(f"  {s['date'].strftime('%Y-%m-%d')} — {s['price']:.2f}")
     
@@ -1117,6 +1117,10 @@ def main():
         st.error("DISCLAIMER: All data shown above is DEMO (randomly generated) data. Do NOT make trading decisions based on this.")
     else:
         st.caption("DragonX Pro Technical Analysis System | Data may be delayed | For educational purposes only")
+
+
+if __name__ == "__main__":
+    main()s only")
 
 
 if __name__ == "__main__":
